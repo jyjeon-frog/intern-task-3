@@ -18,6 +18,10 @@ const eslintConfig = [
       "out/**",
       "build/**",
       "next-env.d.ts",
+      // 앱 코드가 아니라 터미널에서 직접 돌리는 Node 스크립트
+      "scripts/**",
+      "test-results/**",
+      "playwright-report/**",
     ],
   },
 ];

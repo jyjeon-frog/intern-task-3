@@ -30,6 +30,7 @@
 | 차트 | Recharts | 3.x |
 | 검증 | Zod | 4.x |
 | 배포 | Vercel | - |
+| 검증 테스트 | Playwright | 1.49.1 (고정) |
 | 로컬 Node | `~/.local/node/bin` (v22.23.2) | - |
 
 **로컬에서 명령을 실행할 때는 PATH를 먼저 잡는다:**
@@ -46,6 +47,11 @@ export PATH="$HOME/.local/node/bin:$PATH"
   **빌드·CLI 전용 하위 의존성**이다. 앱 요청 경로에서 쓰이지 않으며, 해소하려면 Next 16으로
   올려야 해서 스택 고정 원칙상 두고 간다.
 - `xlsx`는 npm 레지스트리판(0.18.5)에 취약점이 있어 **SheetJS 공식 CDN 배포판**을 쓴다.
+- Playwright는 **1.49.1로 정확히 고정**한다(`--save-exact`). 이 맥은 macOS 13이라
+  1.50 이상은 크로미움 브라우저를 내려받지 못한다.
+- 서버 액션 파일(`"use server"`)에는 `export const runtime = "nodejs"` 를 쓸 수 없다.
+  서버 액션은 페이지와 같은 런타임에서 돌고, 이 프로젝트는 Edge를 어디에도 지정하지
+  않으므로 항상 Node.js 런타임이다.
 - `shadcn` 패키지는 CLI 도구처럼 보이지만 `globals.css`가 `shadcn/tailwind.css`를 import 하므로
   **런타임 의존성으로 남겨둬야 한다.** 지우면 빌드가 깨진다.
 
@@ -63,6 +69,7 @@ sample-data/
   sample_sales_data_202608.xlsx   2026-08, 57건
 scripts/
   generate-sample-data.js         샘플 엑셀 생성기(재현용)
+e2e/                   Playwright 검증 테스트
 src/
   app/
     (auth)/login/      로그인 화면
@@ -76,9 +83,14 @@ src/
     ...                프로젝트 전용 컴포넌트
   lib/
     prisma.ts          Prisma Client 싱글턴
-    auth.ts            Auth.js 설정
-    ...
-middleware.ts          비로그인 전역 차단
+    auth.config.ts     middleware(Edge)에서도 안전한 최소 설정
+    auth.ts            Auth.js 설정 + Credentials Provider (Node 전용)
+    session.ts         requireUser / requireAdmin / requireAdminApi
+    login-attempts.ts  로그인 시도 제한 (DB 기반)
+    validation.ts      Zod 스키마
+  middleware.ts        비로그인 전역 차단
+  types/
+    next-auth.d.ts     세션에 role, loginId 추가
 ```
 
 ---
@@ -208,4 +220,8 @@ npm run db:migrate   # 스키마 변경을 DB에 반영 (개발용)
 npm run db:deploy    # 마이그레이션 적용 (배포용)
 npm run db:seed      # 초기 계정 생성
 npm run db:studio    # DB 내용 브라우저로 확인
+npm test             # Playwright 검증 테스트 (로컬)
+
+# 배포된 주소로 같은 테스트 돌리기
+BASE_URL=https://내프로젝트.vercel.app npm test
 ```
