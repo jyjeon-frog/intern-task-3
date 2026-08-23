@@ -12,6 +12,23 @@ import { authConfig } from "@/lib/auth.config";
  */
 const { auth } = NextAuth(authConfig);
 
+/**
+ * 리다이렉트할 절대 주소를 만든다.
+ *
+ * NEXTAUTH_URL 이 잘못 설정돼 있으면 req.nextUrl 의 호스트가 그 값으로 바뀌어
+ * 배포된 사이트가 엉뚱한 주소(예: localhost)로 보내버린다.
+ * 그래서 실제 요청이 들어온 호스트(x-forwarded-host)를 우선으로 쓴다.
+ */
+function redirectUrl(req: { nextUrl: URL; headers: Headers }, path: string) {
+  const url = new URL(path, req.nextUrl.origin);
+  const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
+  if (host) {
+    url.host = host;
+    url.protocol = `${req.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "")}:`;
+  }
+  return url;
+}
+
 export default auth((req) => {
   const isLoggedIn = !!req.auth;
   const { pathname } = req.nextUrl;
@@ -28,12 +45,12 @@ export default auth((req) => {
       );
     }
     if (pathname === "/login") return NextResponse.next();
-    return NextResponse.redirect(new URL("/login", req.nextUrl));
+    return NextResponse.redirect(redirectUrl(req, "/login"));
   }
 
   // 이미 로그인한 사람이 로그인 화면에 오면 대시보드로
   if (pathname === "/login") {
-    return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
+    return NextResponse.redirect(redirectUrl(req, "/dashboard"));
   }
 
   return NextResponse.next();
