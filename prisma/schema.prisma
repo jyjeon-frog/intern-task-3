@@ -1,0 +1,116 @@
+// VeraNova 판매 데이터 관리 - Prisma 스키마
+// DB: Supabase(PostgreSQL)
+//  - url       : Connection Pooling 주소(6543). 앱 실행 시 사용
+//  - directUrl : 직접 연결 주소(5432). 마이그레이션 시에만 사용
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum SourceType {
+  MANUAL // 화면에서 직접 입력
+  EXCEL // 엑셀 업로드
+}
+
+/// 계정
+model User {
+  id           String    @id @default(cuid())
+  loginId      String    @unique
+  name         String
+  passwordHash String
+  role         Role      @default(USER)
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastLoginAt  DateTime?
+
+  salesRecords  SalesRecord[]
+  uploadBatches UploadBatch[]
+  auditLogs     AuditLog[]    @relation("AuditActor")
+
+  @@index([role])
+}
+
+/// 판매 데이터 1건 = 엑셀 1행
+model SalesRecord {
+  id           String     @id @default(cuid())
+  orderDate    DateTime   @db.Date // 시간 없이 날짜만 저장(시간대 밀림 방지)
+  channel      String
+  region       String
+  productName  String
+  category     String
+  quantity     Int
+  unitPrice    Int
+  amount       Int // 수량 x 단가. 서버에서 항상 재계산
+  customerType String
+  sourceType   SourceType @default(MANUAL)
+  createdAt    DateTime   @default(now())
+
+  // 업로드 배치 삭제 시 소속 데이터도 함께 삭제(실수 복구용 일괄 삭제)
+  uploadBatchId String?
+  uploadBatch   UploadBatch? @relation(fields: [uploadBatchId], references: [id], onDelete: Cascade)
+
+  // 등록자 계정이 삭제돼도 데이터는 남기고 등록자만 비움 -> 화면에 "(삭제된 계정)"으로 표시
+  createdById String?
+  createdBy   User?   @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([orderDate])
+  @@index([channel])
+  @@index([category])
+  @@index([productName])
+  @@index([uploadBatchId])
+  @@index([createdAt])
+}
+
+/// 엑셀 업로드 이력
+model UploadBatch {
+  id          String   @id @default(cuid())
+  fileName    String
+  totalRows   Int
+  successRows Int
+  failedRows  Int
+  createdAt   DateTime @default(now())
+
+  uploadedById String?
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  records SalesRecord[]
+
+  @@index([createdAt])
+}
+
+/// 로그인 시도 기록 (5회 실패 시 1분 잠금 판정에 사용)
+/// 서버리스에서는 메모리에 상태를 둘 수 없으므로 반드시 DB에 기록한다
+model LoginAttempt {
+  id          String   @id @default(cuid())
+  loginId     String
+  success     Boolean
+  attemptedAt DateTime @default(now())
+
+  @@index([loginId, attemptedAt])
+}
+
+/// 관리 행위 기록 (계정 추가/삭제/권한변경, 데이터 삭제 등)
+model AuditLog {
+  id         String   @id @default(cuid())
+  action     String
+  targetType String
+  targetId   String?
+  createdAt  DateTime @default(now())
+
+  actorId String?
+  actor   User?   @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+}
