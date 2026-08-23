@@ -23,7 +23,11 @@ function redirectUrl(req: { nextUrl: URL; headers: Headers }, path: string) {
   const url = new URL(path, req.nextUrl.origin);
   const host = req.headers.get("x-forwarded-host") ?? req.headers.get("host");
   if (host) {
-    url.host = host;
+    // hostname 과 port 를 따로 넣는다.
+    // url.host 에 포트 없는 값을 넣으면 기존 포트(:3000)가 남아버린다.
+    const [hostname, port = ""] = host.split(":");
+    url.hostname = hostname;
+    url.port = port;
     url.protocol = `${req.headers.get("x-forwarded-proto") ?? url.protocol.replace(":", "")}:`;
   }
   return url;
