@@ -1,24 +1,48 @@
 import type { Metadata } from "next";
 
-import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { formatDate, formatNumber } from "@/lib/format";
+import { formatDate, formatDateTime, formatNumber } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { listSales } from "@/lib/sales";
 import { requireAdmin } from "@/lib/session";
 import { DataTabs, type DataTabKey } from "./data-tabs";
+import { ExcelUpload } from "./excel-upload";
 import { ManualEntryForm } from "./manual-entry-form";
 import { SalesList, type SalesFilters } from "./sales-list";
+import { UploadHistory, type UploadBatchRow } from "./upload-history";
 
 export const metadata: Metadata = {
   title: "데이터 관리 · VeraNova 판매 데이터 관리",
 };
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+async function listUploadBatches(): Promise<UploadBatchRow[]> {
+  const batches = await prisma.uploadBatch.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 30,
+    select: {
+      id: true,
+      fileName: true,
+      totalRows: true,
+      successRows: true,
+      failedRows: true,
+      createdAt: true,
+      uploadedBy: { select: { name: true } },
+      _count: { select: { records: true } },
+    },
+  });
+
+  return batches.map((b) => ({
+    id: b.id,
+    fileName: b.fileName,
+    totalRows: b.totalRows,
+    successRows: b.successRows,
+    failedRows: b.failedRows,
+    remainingRows: b._count.records,
+    uploadedByLabel: b.uploadedBy?.name ?? "(삭제된 계정)",
+    createdAt: formatDateTime(b.createdAt),
+  }));
+}
 
 export default async function DataPage({
   searchParams,
@@ -47,9 +71,10 @@ export default async function DataPage({
   };
   const page = Math.max(1, Number(one("page")) || 1);
 
-  const [totalCount, list] = await Promise.all([
+  const [totalCount, list, batches] = await Promise.all([
     prisma.salesRecord.count(),
     tab === "list" ? listSales({ ...filters, page }) : null,
+    tab === "upload" ? listUploadBatches() : null,
   ]);
 
   return (
@@ -68,12 +93,10 @@ export default async function DataPage({
       ) : null}
 
       {tab === "upload" ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>엑셀 업로드</CardTitle>
-            <CardDescription>다음 단계에서 만듭니다.</CardDescription>
-          </CardHeader>
-        </Card>
+        <>
+          <ExcelUpload />
+          <UploadHistory batches={batches ?? []} />
+        </>
       ) : null}
 
       {tab === "list" && list ? (
