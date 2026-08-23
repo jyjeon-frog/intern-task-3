@@ -8,6 +8,13 @@ import { loginSchema } from "@/lib/validation";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  logger: {
+    // 비밀번호가 틀린 건 정상적인 흐름이다. 서버 로그에 스택까지 남기지 않는다.
+    error(error) {
+      if (error.name === "CredentialsSignin") return;
+      console.error(error.name, error.message);
+    },
+  },
   providers: [
     Credentials({
       credentials: {

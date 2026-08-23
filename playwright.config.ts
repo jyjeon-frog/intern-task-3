@@ -11,6 +11,14 @@ dotenv.config();
 const baseURL = process.env.BASE_URL ?? "http://localhost:3000";
 const isLocal = baseURL.includes("localhost");
 
+/**
+ * PLAYWRIGHT_CHROME_PATH 를 지정하면 그 크롬으로 테스트한다.
+ * 이 개발용 맥은 macOS 13이라 Playwright가 크로미움을 내려받지 못해서,
+ * 별도로 받아둔 Chrome for Testing 을 가리킨다. (.env 참고)
+ * 지정하지 않으면 Playwright 기본 크로미움을 쓴다.
+ */
+const chromePath = process.env.PLAYWRIGHT_CHROME_PATH;
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: false,
@@ -24,6 +32,7 @@ export default defineConfig({
     locale: "ko-KR",
     timezoneId: "Asia/Seoul",
     trace: "retain-on-failure",
+    launchOptions: chromePath ? { executablePath: chromePath } : {},
   },
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },

@@ -47,8 +47,14 @@ export PATH="$HOME/.local/node/bin:$PATH"
   **빌드·CLI 전용 하위 의존성**이다. 앱 요청 경로에서 쓰이지 않으며, 해소하려면 Next 16으로
   올려야 해서 스택 고정 원칙상 두고 간다.
 - `xlsx`는 npm 레지스트리판(0.18.5)에 취약점이 있어 **SheetJS 공식 CDN 배포판**을 쓴다.
-- Playwright는 **1.49.1로 정확히 고정**한다(`--save-exact`). 이 맥은 macOS 13이라
-  1.50 이상은 크로미움 브라우저를 내려받지 못한다.
+- Playwright는 **`^1.51.1` 이상**이어야 한다. `next@15.5.x`가 `@playwright/test: ^1.51.1`을
+  optional peer dependency로 선언하고 있어서, 더 낮은 버전을 쓰면 Vercel에서
+  `npm install`이 ERESOLVE로 실패한다. (현재 `^1.62.1`)
+  `.npmrc`의 `legacy-peer-deps`나 Vercel Install Command 변경 같은 우회는 쓰지 않는다.
+- 다만 이 개발용 맥은 **macOS 13**이라 Playwright 1.50 이상은 자체 크로미움을 내려받지
+  못한다. 그래서 Chrome for Testing 을 `~/.local/chrome-for-testing/` 에 따로 받아두고
+  `.env`의 `PLAYWRIGHT_CHROME_PATH` 로 가리킨다. 이 값이 없으면 Playwright 기본
+  크로미움을 쓰므로 다른 환경에서는 신경 쓸 필요가 없다.
 - 서버 액션 파일(`"use server"`)에는 `export const runtime = "nodejs"` 를 쓸 수 없다.
   서버 액션은 페이지와 같은 런타임에서 돌고, 이 프로젝트는 Edge를 어디에도 지정하지
   않으므로 항상 Node.js 런타임이다.
