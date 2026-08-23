@@ -76,6 +76,7 @@ sample-data/
 scripts/
   generate-sample-data.js         샘플 엑셀 생성기(재현용)
 e2e/                   Playwright 검증 테스트
+  global-setup.ts      매 실행 전 기준 계정(admin/user01) 복구
 src/
   app/
     (auth)/login/      로그인 화면
@@ -207,6 +208,9 @@ src/
 - Edge 런타임 금지 / 업로드 파일 디스크 쓰기 금지
 - `.env`, 실제 비밀번호, API 키를 GitHub에 올리기 금지
 - 검증 테스트를 돌리지 않은 상태로 "완료" 선언 금지
+- 테스트가 기준 계정(admin/user01)이나 남의 데이터를 건드린 채로 끝내기 금지.
+  각 테스트 파일은 자기가 만든 것을 `afterAll` 에서 지우고,
+  기준 계정은 `e2e/global-setup.ts` 가 실행 전에 되돌린다.
 - 여러 작업 단계를 한 번에 몰아서 진행 금지 — **한 단계 = 한 커밋**, 끝나면 멈추고 확인받는다
 
 ---
