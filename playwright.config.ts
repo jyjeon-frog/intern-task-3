@@ -26,8 +26,9 @@ export default defineConfig({
   workers: 1,
   retries: 0,
   reporter: [["list"]],
-  timeout: 60_000,
-  expect: { timeout: 10_000 },
+  // 배포판은 네트워크·DB 왕복 때문에 로컬보다 느리다. 넉넉하게 잡는다.
+  timeout: isLocal ? 60_000 : 120_000,
+  expect: { timeout: isLocal ? 10_000 : 30_000 },
   use: {
     baseURL,
     locale: "ko-KR",

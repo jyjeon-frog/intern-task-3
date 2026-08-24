@@ -48,9 +48,12 @@ export async function getDashboardData(
   filters: DashboardFilters,
 ): Promise<DashboardData> {
   const where = buildSalesWhere(filters);
+  const hasFilter = Object.values(filters).some(Boolean);
 
   const [
-    totalRecords,
+    // 조건이 없으면 아래 aggregate 의 건수가 곧 전체 건수라서 쿼리를 아낀다.
+    // (DB 연결이 1개로 묶여 있어 쿼리 수가 곧 응답 속도다)
+    totalRecordsQuery,
     aggregate,
     dailyRows,
     channelRows,
@@ -59,7 +62,7 @@ export async function getDashboardData(
     productRows,
     recentRows,
   ] = await Promise.all([
-    prisma.salesRecord.count(),
+    hasFilter ? prisma.salesRecord.count() : Promise.resolve(null),
     prisma.salesRecord.aggregate({
       where,
       _sum: { amount: true },
@@ -110,6 +113,7 @@ export async function getDashboardData(
 
   const totalAmount = aggregate._sum.amount ?? 0;
   const orderCount = aggregate._count._all;
+  const totalRecords = totalRecordsQuery ?? orderCount;
 
   const dailyTrend = dailyRows
     .map((row) => {
