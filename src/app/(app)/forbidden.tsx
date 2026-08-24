@@ -17,7 +17,9 @@ export default function Forbidden() {
           이 페이지는 어드민 계정만 이용할 수 있습니다.
         </p>
       </div>
-      <Button render={<Link href="/dashboard" />}>대시보드로 돌아가기</Button>
+      <Button nativeButton={false} render={<Link href="/dashboard" />}>
+        대시보드로 돌아가기
+      </Button>
     </div>
   );
 }

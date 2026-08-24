@@ -10,11 +10,31 @@ import { ADMIN, USER, login } from "./helpers";
 const FIXTURES = path.join(__dirname, "fixtures");
 const SAMPLES = path.join(__dirname, "..", "sample-data");
 
-const UPLOADED_FILE_NAMES = [
-  "sample_sales_data_202608.xlsx",
-  "errors.xlsx",
-  "aliases.xlsx",
-];
+/**
+ * 업로드할 때 쓰는 파일명은 시드 데이터의 배치 이름과 겹치지 않게 e2e_ 를 붙인다.
+ * (같은 이름이면 정리 단계에서 시드 배치까지 지워버린다)
+ */
+const NAME_SAMPLE = "e2e_sample_202608.xlsx";
+const NAME_ERRORS = "e2e_errors.xlsx";
+const NAME_ALIASES = "e2e_aliases.xlsx";
+
+const UPLOADED_FILE_NAMES = [NAME_SAMPLE, NAME_ERRORS, NAME_ALIASES];
+
+const XLSX_MIME =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+/** 파일을 원하는 이름으로 붙여 넣는다 */
+async function attach(
+  page: import("@playwright/test").Page,
+  filePath: string,
+  name: string,
+) {
+  await page.getByLabel("엑셀 파일 선택").setInputFiles({
+    name,
+    mimeType: XLSX_MIME,
+    buffer: readFileSync(filePath),
+  });
+}
 
 test.describe.configure({ mode: "serial" });
 
@@ -39,9 +59,7 @@ test("[9] 정상 엑셀 업로드 — 미리보기 건수가 맞고 저장 후 D
   await login(page, ADMIN);
   await page.goto("/data?tab=upload");
 
-  await page
-    .getByLabel("엑셀 파일 선택")
-    .setInputFiles(path.join(SAMPLES, "sample_sales_data_202608.xlsx"));
+  await attach(page, path.join(SAMPLES, "sample_sales_data_202608.xlsx"), NAME_SAMPLE);
 
   // 미리보기: 57행 전부 정상
   await expect(page.getByTestId("preview-success")).toHaveText("57");
@@ -64,7 +82,7 @@ test("[9] 정상 엑셀 업로드 — 미리보기 건수가 맞고 저장 후 D
 
   // 매출 합계도 파일과 일치한다 (수량 x 단가 재계산 결과)
   const batch = await db.uploadBatch.findFirstOrThrow({
-    where: { fileName: "sample_sales_data_202608.xlsx" },
+    where: { fileName: NAME_SAMPLE },
     orderBy: { createdAt: "desc" },
   });
   const agg = await db.salesRecord.aggregate({
@@ -78,7 +96,7 @@ test("[9] 정상 엑셀 업로드 — 미리보기 건수가 맞고 저장 후 D
   // 업로드 이력에 남는다
   await expect(
     page.locator(`tr[data-batch-id="${batch.id}"]`),
-  ).toContainText("sample_sales_data_202608.xlsx");
+  ).toContainText(NAME_SAMPLE);
   await expect(
     page.locator(`tr[data-batch-id="${batch.id}"]`),
   ).toContainText("관리자");
@@ -100,9 +118,7 @@ test("[10] 오류가 섞인 엑셀 — 오류 행을 정확히 짚고 정상 행
 
   await login(page, ADMIN);
   await page.goto("/data?tab=upload");
-  await page
-    .getByLabel("엑셀 파일 선택")
-    .setInputFiles(path.join(FIXTURES, "errors.xlsx"));
+  await attach(page, path.join(FIXTURES, "errors.xlsx"), NAME_ERRORS);
 
   // 7행 중 정상 4 / 오류 3
   await expect(page.getByTestId("preview-success")).toHaveText("4");
@@ -127,7 +143,7 @@ test("[10] 오류가 섞인 엑셀 — 오류 행을 정확히 짚고 정상 행
   expect(await db.salesRecord.count()).toBe(before + 4);
 
   const batch = await db.uploadBatch.findFirstOrThrow({
-    where: { fileName: "errors.xlsx" },
+    where: { fileName: NAME_ERRORS },
     orderBy: { createdAt: "desc" },
   });
   expect(batch.totalRows).toBe(7);
@@ -153,9 +169,7 @@ test("[11] 컬럼 이름이 조금 달라도 별칭으로 인식한다", async (
 
   await login(page, ADMIN);
   await page.goto("/data?tab=upload");
-  await page
-    .getByLabel("엑셀 파일 선택")
-    .setInputFiles(path.join(FIXTURES, "aliases.xlsx"));
+  await attach(page, path.join(FIXTURES, "aliases.xlsx"), NAME_ALIASES);
 
   await expect(page.getByTestId("preview-success")).toHaveText("3");
   await expect(page.getByTestId("preview-failed")).toHaveText("0");
@@ -166,7 +180,7 @@ test("[11] 컬럼 이름이 조금 달라도 별칭으로 인식한다", async (
   expect(await db.salesRecord.count()).toBe(before + 3);
 
   const batch = await db.uploadBatch.findFirstOrThrow({
-    where: { fileName: "aliases.xlsx" },
+    where: { fileName: NAME_ALIASES },
     orderBy: { createdAt: "desc" },
   });
   const rows = await db.salesRecord.findMany({
@@ -189,9 +203,7 @@ test("[10-1] 판매 데이터 형식이 아닌 파일은 안내 메시지를 보
 }) => {
   await login(page, ADMIN);
   await page.goto("/data?tab=upload");
-  await page
-    .getByLabel("엑셀 파일 선택")
-    .setInputFiles(path.join(FIXTURES, "wrong-format.xlsx"));
+  await attach(page, path.join(FIXTURES, "wrong-format.xlsx"), "e2e_wrong.xlsx");
 
   await expect(page.getByRole("main").getByRole("alert")).toContainText(
     "필요한 컬럼을 찾지 못했습니다",
@@ -209,7 +221,7 @@ test("[양식] 양식 다운로드 — 헤더와 예시 1행이 든 엑셀이 �
 
   const [download] = await Promise.all([
     page.waitForEvent("download"),
-    page.getByRole("link", { name: "양식 다운로드" }).click(),
+    page.locator('a[href="/api/sales/template"]').click(),
   ]);
 
   expect(download.suggestedFilename()).toBe("veranova-sales-template.xlsx");
@@ -236,7 +248,7 @@ test("[양식] 양식 다운로드 — 헤더와 예시 1행이 든 엑셀이 �
 
 test("[배치삭제] 업로드 묶음 단위로 되돌린다", async ({ page }) => {
   const batch = await db.uploadBatch.findFirstOrThrow({
-    where: { fileName: "aliases.xlsx" },
+    where: { fileName: NAME_ALIASES },
     orderBy: { createdAt: "desc" },
   });
   const before = await db.salesRecord.count();
@@ -245,7 +257,7 @@ test("[배치삭제] 업로드 묶음 단위로 되돌린다", async ({ page }) 
   await page.goto("/data?tab=upload");
 
   await page
-    .getByRole("button", { name: "aliases.xlsx 업로드 되돌리기" })
+    .getByRole("button", { name: `${NAME_ALIASES} 업로드 되돌리기` })
     .click();
   await expect(page.getByText("이 업로드를 되돌릴까요?")).toBeVisible();
   await page.getByRole("button", { name: "삭제", exact: true }).click();
@@ -260,7 +272,7 @@ test("[7-1] 일반 계정 세션으로 업로드·양식·배치삭제 API를 �
   page,
 }) => {
   const batch = await db.uploadBatch.findFirstOrThrow({
-    where: { fileName: "errors.xlsx" },
+    where: { fileName: NAME_ERRORS },
     orderBy: { createdAt: "desc" },
   });
   const before = await db.salesRecord.count();
@@ -270,9 +282,8 @@ test("[7-1] 일반 계정 세션으로 업로드·양식·배치삭제 API를 �
   const upload = await page.request.post("/api/sales/upload?commit=1", {
     multipart: {
       file: {
-        name: "aliases.xlsx",
-        mimeType:
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        name: NAME_ALIASES,
+        mimeType: XLSX_MIME,
         buffer: readFileSync(path.join(FIXTURES, "aliases.xlsx")),
       },
     },

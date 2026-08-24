@@ -50,9 +50,9 @@ test("[8] 어드민이 직접 입력하면 목록과 건수에 즉시 반영된�
     page.getByText(`등록된 판매 데이터 ${(before + 1).toLocaleString("ko-KR")}건`),
   ).toBeVisible();
 
-  // 목록에도 보인다
-  await page.goto("/data?tab=list");
-  const row = page.locator("tr", { hasText: `${TAG} 하이드라 세럼` });
+  // 목록에도 보인다 (데이터가 많을 수 있으니 제품명으로 찾는다)
+  await page.goto("/data?tab=list&q=" + encodeURIComponent(`${TAG} 하이드라 세럼`));
+  const row = page.locator("tbody tr").first();
   await expect(row).toBeVisible();
   await expect(row).toContainText("2026-06-15");
   await expect(row).toContainText("84,000");

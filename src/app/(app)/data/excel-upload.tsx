@@ -159,6 +159,7 @@ export function ExcelUpload() {
           </div>
           <Button
             variant="outline"
+            nativeButton={false}
             render={<a href="/api/sales/template" download />}
           >
             <DownloadIcon className="size-4" />
