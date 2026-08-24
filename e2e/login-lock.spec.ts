@@ -94,6 +94,31 @@ test("[2] 5회 연속 실패하면 잠기고, 1분이 지나면 풀린다", asyn
   await expect(page).toHaveURL(/\/dashboard$/);
 });
 
+test("[2-실시간] 5회 실패 후 실제로 1분을 기다리면 잠금이 풀린다", async ({
+  page,
+}) => {
+  test.slow(); // 실제로 1분 이상 기다리는 테스트
+
+  await db.loginAttempt.deleteMany({ where: { loginId: LOCK_ID } });
+
+  for (let i = 0; i < 5; i++) {
+    await tryLogin(page, LOCK_ID, "틀린비밀번호");
+    await expect(page.getByRole("main").getByRole("alert")).toBeVisible();
+  }
+
+  // 잠긴 상태 확인
+  await tryLogin(page, LOCK_ID, LOCK_PW);
+  await expect(page.getByRole("main").getByRole("alert")).toContainText(
+    "초 후에 다시 시도해주세요",
+  );
+
+  // 시간을 조작하지 않고 실제로 65초를 기다린다
+  await page.waitForTimeout(65_000);
+
+  await tryLogin(page, LOCK_ID, LOCK_PW);
+  await expect(page).toHaveURL(/\/dashboard$/);
+});
+
 test("[기록] 로그인 시도가 DB(LoginAttempt)에 남는다", async () => {
   const attempts = await db.loginAttempt.findMany({
     where: { loginId: LOCK_ID },

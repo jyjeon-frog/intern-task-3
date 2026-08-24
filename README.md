@@ -1,36 +1,215 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# VeraNova 판매 데이터 관리
 
-## Getting Started
+가상의 화장품 브랜드 **VeraNova**의 판매 데이터를 입력·관리·시각화하는 사내용 웹앱입니다.
+로그인한 사용자만 이용할 수 있고, 계정 등급(일반 / 어드민)에 따라 접근할 수 있는 페이지가 다릅니다.
 
-First, run the development server:
+> 이 저장소의 모든 판매 데이터는 **가상 데이터**입니다. 실제 회사·실존 인물 정보가 아닙니다.
+
+- **배포 주소**: https://intern-task-3-black.vercel.app
+- **저장소**: https://github.com/jyjeon-frog/intern-task-3
+
+## 테스트 계정
+
+| 등급 | 아이디 | 비밀번호 | 접근 가능한 페이지 |
+| --- | --- | --- | --- |
+| 어드민 | `admin` | `Admin!2026` | 대시보드 · 데이터 관리 · 계정 관리 |
+| 일반 | `user01` | `User!2026` | 대시보드 |
+
+일반 계정으로 `/data`, `/accounts` 주소를 직접 입력하면 **403** 화면이 나옵니다.
+
+---
+
+## 기능
+
+### 로그인 `/login`
+
+- 아이디 + 비밀번호 로그인 (회원가입 없음 — 계정은 어드민이 만듭니다)
+- 실패 메시지는 이유와 무관하게 항상 `아이디 또는 비밀번호가 올바르지 않습니다`
+  (계정이 있는지 없는지 알려주지 않기 위해서입니다)
+- **같은 아이디로 5회 연속 실패하면 1분 잠금** — 시도 기록을 DB(`LoginAttempt`)에 남겨서
+  판정하므로 서버가 여러 대여도 정확히 동작합니다
+- 비활성 계정은 로그인할 수 없습니다
+- 비밀번호는 bcrypt(cost 12) 해시로 저장하며 평문은 어디에도 남기지 않습니다
+
+### 대시보드 `/dashboard` — 모든 계정
+
+- **요약 카드 4개**: 총 매출액 / 총 주문 건수 / 평균 주문금액(AOV) / 등록된 데이터 건수
+- **그래프 4개**: 일별 매출 추이(라인) · 채널별 매출(막대) · 카테고리별 매출 비중(도넛) ·
+  신규 vs 재구매 비중(파이)
+- **표 2개**: 제품별 매출 순위 TOP 10(수량·매출액·비중%) · 최근 등록된 데이터 10건
+- **필터**: 기간(시작일~종료일) · 판매채널 · 카테고리 →
+  바꾸면 카드·그래프·표가 **함께** 갱신되고, 조건이 주소(쿼리스트링)에 남아 새로고침해도 유지됩니다
+- 데이터가 없을 때는 "데이터를 먼저 등록해주세요" 안내를 보여줍니다
+- 모든 집계는 DB에서 계산합니다(전체 행을 브라우저로 내려보내지 않습니다)
+
+### 데이터 관리 `/data` — 어드민 전용
+
+탭 3개로 나뉘어 있고, 탭 상태도 주소에 남습니다.
+
+**① 직접 입력** — 9개 항목 입력 폼. 채널을 고르면 지역이 자동으로 맞춰지고,
+매출액은 수량 × 단가로 자동 계산됩니다. 저장할 때 **서버가 매출액을 다시 계산**합니다.
+
+**② 엑셀 업로드**
+
+- 파일 선택 또는 드래그&드롭 (.xlsx, .xls)
+- 올리면 **바로 저장하지 않고 미리보기**부터 보여줍니다:
+  읽어들인 총 행 수 / 정상 행 수 / 오류 행 수 + 앞 10행 표
+- 오류 행은 **몇 번째 행의 어떤 컬럼이 왜 문제인지** 값과 함께 알려줍니다
+  (예: `3행: 수량 — 수량이 숫자가 아닙니다. (값: '두개')`)
+- **[이대로 저장]** 을 눌러야 저장되고, 오류 행은 건너뛰고 정상 행만 들어갑니다
+- 컬럼 이름이 조금 달라도 인식합니다 (공백 제거·대소문자 무시, `주문일/날짜/일자`,
+  `매출액/금액/매출`, `수량/개수`, `단가/가격` 등)
+- 날짜는 엑셀 날짜 형식과 `2026-06-01`, `2026.06.02`, `2026/06/03`, `20260601` 을 모두 읽습니다
+- 매출액이 비어 있으면 수량 × 단가로 채웁니다
+- **양식 다운로드** 버튼: 헤더와 예시 1행이 든 빈 엑셀을 받습니다
+- **업로드 이력**과 **묶음 단위 되돌리기**(잘못 올린 파일을 데이터째 취소)
+
+**③ 데이터 목록** — 페이지당 20건 · 주문일/매출액 정렬 · 제품명 검색 ·
+채널/카테고리/기간 필터 · 개별 삭제 · 체크박스 다중 삭제 (모두 확인 창을 거칩니다)
+
+### 계정 관리 `/accounts` — 어드민 전용
+
+- 계정 목록(아이디·이름·등급·활성 여부·마지막 로그인·생성일)
+- 계정 추가(아이디 중복 검사) · 등급 즉시 변경(USER ↔ ADMIN) ·
+  활성/비활성 전환 · 비밀번호 초기화 · 삭제
+- 안전장치
+  - 어드민이 **자기 계정**을 삭제·강등·비활성화하는 것을 막습니다
+  - 결과적으로 **활성 어드민이 0명**이 되는 모든 조작을 막습니다
+  - 삭제된 계정이 등록한 판매 데이터는 그대로 남고 등록자만 `(삭제된 계정)`으로 표시됩니다
+- 계정 추가/삭제/권한변경/데이터 삭제는 `AuditLog`에 기록됩니다
+
+### 권한
+
+| 페이지 | 비로그인 | 일반(USER) | 어드민(ADMIN) |
+| --- | --- | --- | --- |
+| `/login` | ○ | ○ | ○ |
+| `/dashboard` | → `/login` | ○ | ○ |
+| `/data` | → `/login` | **403** | ○ |
+| `/accounts` | → `/login` | **403** | ○ |
+
+권한 검사는 **서버에서 3중**으로 합니다.
+
+1. `middleware` — 세션이 없으면 모든 페이지를 `/login`으로 보내고, API는 401을 돌려줍니다
+2. 페이지 — 등급을 다시 확인하고 권한이 없으면 실제 HTTP 403 응답을 냅니다
+3. **모든 API 라우트** — 진입 직후 세션과 등급을 다시 확인합니다
+
+메뉴를 숨기는 것은 편의일 뿐이며, 주소를 직접 입력하거나 API를 직접 호출해도 막힙니다.
+
+---
+
+## 기술 스택
+
+| 항목 | 사용 기술 |
+| --- | --- |
+| 프레임워크 | Next.js 15 (App Router) + TypeScript |
+| 스타일 | Tailwind CSS v4 + shadcn/ui |
+| DB | Supabase (PostgreSQL) |
+| ORM | Prisma 6 |
+| 인증 | Auth.js (NextAuth) Credentials Provider, JWT 세션 |
+| 비밀번호 | bcryptjs (cost 12) |
+| 엑셀 | SheetJS (`xlsx`) |
+| 차트 | Recharts |
+| 입력 검증 | Zod (서버에서도 반드시 검증) |
+| 검증 테스트 | Playwright |
+| 배포 | Vercel (실행 지역: 서울 `icn1`) |
+
+UI 언어 한국어 / 시간대 Asia/Seoul / 날짜 표기 `YYYY-MM-DD`
+
+---
+
+## 로컬에서 실행하기
+
+### 1. 준비물
+
+- Node.js 22 이상
+- Supabase 프로젝트 (PostgreSQL)
+
+### 2. 내려받고 설치
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/jyjeon-frog/intern-task-3.git
+cd intern-task-3
+npm install
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 3. 환경변수 설정
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+`.env.example` 을 복사해 `.env` 를 만들고 값을 채웁니다.
+각 값을 Supabase / Vercel 어느 화면에서 복사하는지는 `.env.example` 주석에 적혀 있습니다.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+cp .env.example .env
+```
 
-## Learn More
+| 이름 | 설명 |
+| --- | --- |
+| `DATABASE_URL` | Supabase Connection Pooling 주소(포트 **6543**) + `?pgbouncer=true&connection_limit=1` |
+| `DIRECT_URL` | Supabase 직접 연결 주소(포트 **5432**) — 마이그레이션 전용 |
+| `AUTH_SECRET` | 세션 암호화 키 (`npx auth secret` 으로 생성) |
+| `NEXTAUTH_URL` | 사이트 주소 (로컬은 `http://localhost:3000`) |
+| `INITIAL_ADMIN_ID` | 최초 어드민 아이디 (`admin`) |
+| `INITIAL_ADMIN_PASSWORD` | 최초 어드민 비밀번호 |
 
-To learn more about Next.js, take a look at the following resources:
+### 4. DB 준비와 실행
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+npx prisma migrate deploy   # 테이블 생성
+npm run db:seed             # 초기 계정 생성 (admin / user01)
+npm run db:seed:sales       # (선택) 샘플 판매 데이터 388건 넣기
+npm run dev                 # http://localhost:3000
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 자주 쓰는 명령
 
-## Deploy on Vercel
+```bash
+npm run dev            # 개발 서버
+npm run build          # 마이그레이션 적용 + 프로덕션 빌드
+npm run lint           # 문법 검사
+npm run db:migrate     # 스키마 변경을 DB에 반영 (개발용)
+npm run db:seed        # 초기 계정 생성
+npm run db:seed:sales  # 샘플 판매 데이터 넣기
+npm run db:studio      # DB 내용을 브라우저로 확인
+npm test               # Playwright 검증 테스트 (로컬)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+# 배포된 주소에 대고 같은 테스트 돌리기
+BASE_URL=https://intern-task-3-black.vercel.app npm test
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
+
+## 데이터 구조
+
+| 테이블 | 역할 |
+| --- | --- |
+| `User` | 계정 (아이디·이름·비밀번호 해시·등급·활성 여부·마지막 로그인) |
+| `SalesRecord` | 판매 데이터 1건 (= 엑셀 1행) |
+| `UploadBatch` | 엑셀 업로드 이력 (파일명·행 수·업로더·일시) |
+| `LoginAttempt` | 로그인 시도 기록 (잠금 판정용) |
+| `AuditLog` | 관리 행위 기록 (계정 추가/삭제/권한변경, 데이터 삭제) |
+
+판매 데이터 컬럼: 주문일 · 판매채널 · 지역 · 제품명 · 카테고리 · 수량 · 단가 · 매출액 · 고객유형
+
+- 판매채널: 자사몰, 쿠팡, 네이버 스마트스토어, 올리브영 온라인, 무신사, Amazon US, Qoo10 JP, Shopee SG
+- 지역: 국내, 미국, 일본, 싱가포르
+- 카테고리: 스킨케어, 클렌징, 마스크, 선케어, 바디
+- 고객유형: 신규, 재구매
+
+샘플 엑셀은 `sample-data/` 에 있습니다.
+
+| 파일 | 내용 |
+| --- | --- |
+| `sample_sales_data.xlsx` | 2026-05-01 ~ 2026-07-31, 331건 |
+| `sample_sales_data_202608.xlsx` | 2026-08-01 ~ 2026-08-17, 57건 (추가 업로드 테스트용) |
+
+---
+
+## 검증 테스트
+
+`npm test` 로 Playwright 테스트를 실행합니다. 실행 전에 기준 계정(`admin`, `user01`)을
+자동으로 원래 상태로 되돌리고, 각 테스트는 자기가 만든 데이터를 끝나고 정리합니다.
+같은 테스트를 배포 주소에 대고도 그대로 돌릴 수 있습니다.
+
+테스트가 확인하는 것: 비로그인 차단 · 로그인 잠금(실제 1분 대기 포함) · 비활성 계정 차단 ·
+등급별 페이지 접근(403) · 화면을 우회한 API 직접 호출 차단 · 직접 입력과 대시보드 반영 ·
+엑셀 미리보기/오류 지적/별칭 인식/배치 저장 · 대시보드 필터와 SQL 대조 ·
+계정 추가·권한 변경·마지막 어드민 보호 · 휴대폰 화면 레이아웃
